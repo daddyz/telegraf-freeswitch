@@ -35,9 +35,12 @@ func (sp *SofiaProfile) loadXMLProfile(p *Profile) error {
 	sp.Name = p.Name
 	dataGroupSlice := dataParser.FindStringSubmatch(p.Data)
 	if len(dataGroupSlice) != 2 {
-		return errors.New("could not find address info in: " + p.Data)
+		//return errors.New("could not find address info in: " + p.Data)
+		sp.Address = dataGroupSlice[0]
+	} else {
+		sp.Address = dataGroupSlice[1]
 	}
-	sp.Address = dataGroupSlice[1]
+	//sp.Address = dataGroupSlice[1]
 	runningGroupSlice := runningParser.FindStringSubmatch(p.State)
 	if len(runningGroupSlice) != 2 {
 		return errors.New("cannot find running info in: " + p.State)

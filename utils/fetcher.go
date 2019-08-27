@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"regexp"
 
 	"github.com/rif/go-eventsocket/eventsocket"
 )
@@ -13,11 +14,18 @@ const (
 	InfluxFormat = "INFLUX"
 )
 
+var (
+	availableParser = regexp.MustCompile(`available => (\d+)`)
+	allocatedParser = regexp.MustCompile(`allocated => (\d+)`)
+)
+
 type Fetcher struct {
 	conn          *eventsocket.Connection
 	sessions      *Sessions
 	sofiaProfiles []*SofiaProfile
 	cacheTime     time.Time
+	amdAvailable  string
+	amdAllocated  string
 }
 
 func NewFetcher(host string, port int, pass string) (*Fetcher, error) {
@@ -81,6 +89,17 @@ func (f *Fetcher) GetData() error {
 	if err != nil {
 		return fmt.Errorf("error parsing xmlstatus: %v", err)
 	}
+	ev, err = f.conn.Send("api amd_info")
+	if err != nil {
+		return fmt.Errorf("error sending amd_info: %v", err)
+	}
+
+	availableSlice := availableParser.FindStringSubmatch(ev.Body)
+	f.amdAvailable = availableSlice[1]
+
+	allocatedSlice := allocatedParser.FindStringSubmatch(ev.Body)
+	f.amdAllocated = allocatedSlice[1]
+
 	f.sessions = sessions
 	f.sofiaProfiles = sofiaProfiles
 	f.cacheTime = time.Now()
@@ -114,7 +133,7 @@ func (f *Fetcher) FormatOutput(format string) (string, string) {
 		profiles, _ := json.MarshalIndent(pfs, "", " ")
 		return string(status), string(profiles)
 	}
-	status := fmt.Sprintf("freeswitch_sessions active=%d,peak=%d,peak_5min=%d,total=%d,rate_current=%d,rate_max=%d,rate_peak=%d,rate_peak_5min=%d\n",
+	status := fmt.Sprintf("freeswitch_sessions active=%d,peak=%d,peak_5min=%d,total=%d,rate_current=%d,rate_max=%d,rate_peak=%d,rate_peak_5min=%d,amd_available=%s,amd_allocated=%s\n",
 		f.sessions.Count.Active,
 		f.sessions.Count.Peak,
 		f.sessions.Count.Peak5min,
@@ -123,6 +142,8 @@ func (f *Fetcher) FormatOutput(format string) (string, string) {
 		f.sessions.Rate.Max,
 		f.sessions.Rate.Peak,
 		f.sessions.Rate.Peak5min,
+		f.amdAvailable,
+		f.amdAllocated,
 	)
 	profiles := ""
 	for _, sofiaProfile := range f.sofiaProfiles {
